@@ -65,7 +65,7 @@ The target is an idiomatic Flask application built around the **Application Fact
 | `express.Router()` | `Blueprint(...)` | One blueprint per route group; register via `app.register_blueprint(bp)`. |
 | `app.use(mw)` | `@app.before_request` / `@app.after_request` hooks, WSGI middleware, route decorators | Preserve registration order and short-circuit semantics. |
 | `req` / `res` | `flask.request` / `make_response` / `jsonify` | `res.status(n).json(x)` → `(jsonify(x), n)`; `res.send(t)` → `return t`. |
-| Route param `/users/:id` | `/users/<id>` (or `<int:id>`) | Use a typed converter where the source parsed numerics. |
+| Route parameters in source paths | Flask path converters | Use a typed converter where the source parsed numerics; exact paths and converters are derived only from committed source routes. |
 | `express.json()` body parsing | `request.get_json()` | Parsed on demand rather than via mounted middleware. |
 | `next(err)` error propagation | raised exceptions + `@app.errorhandler` | Centralize error mapping; preserve status / body. |
 | `async / await` handlers | synchronous WSGI view functions (default) | Default to synchronous; flag `async` views or Quart only for genuinely async-heavy / streaming / websocket workloads. |
@@ -132,14 +132,14 @@ The versions below are the **planned target** for the migration, selected and ve
 | **Werkzeug** | **≥ 3.1** | WSGI routing / utilities — installed with Flask 3.1.3. |
 | **Jinja2** | **3.1.x** | Server-side templating — installed with Flask; replaces ejs / pug / handlebars (only if SSR is present in the source). |
 | **gunicorn** | **26.0.0** | Production WSGI HTTP server on **UNIX**. Requires Python ≥ 3.10. |
-| **waitress** | **latest stable** | Production WSGI HTTP server on **Windows** (gunicorn is UNIX-only because of `fcntl`). Used in place of gunicorn on Windows hosts. |
+| **waitress** | **3.0.2** | Production WSGI HTTP server on **Windows** (gunicorn is UNIX-only because of `fcntl`). Used in place of gunicorn on Windows hosts. |
 | **SQLAlchemy** | **2.0.50** | ORM / Core — **conditional**; only included if the future source uses a relational database. |
 
 To write a `requirements.txt` that builds on both platforms, declare both production servers with environment markers, e.g.:
 
 ```text
 gunicorn==26.0.0; sys_platform != 'win32'
-waitress; sys_platform == 'win32'
+waitress==3.0.2; sys_platform == 'win32'
 ```
 
 ### 3.2 Conditional Dependencies — "pin at implementation"
@@ -221,8 +221,10 @@ gunicorn 'wsgi:app'
 **Production (Windows) — waitress:**
 
 ```powershell
-python -m waitress --listen=*:<port> wsgi:app
+python -m waitress wsgi:app
 ```
+
+Host and port are passed via waitress's `--listen` argument once those values are derived from the committed source; the bare command above binds to waitress's default address.
 
 **Development — Flask debug server (auto-reload, debugger):**
 
